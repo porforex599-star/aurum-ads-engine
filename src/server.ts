@@ -1,28 +1,36 @@
 import express from 'express';
-import { config } from 'dotenv';
+import { config } from './config';
+import { logger } from './lib/logger';
+import campaignsRouter from './routes/campaigns';
 
-config();
-
-const app = express();
+export const app = express();
 app.use(express.json({ limit: '5mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'aurum-ads-engine',
-    version: '0.1.0',
-    phase: 0,
-    timestamp: new Date().toISOString()
+    version: '0.2.0',
+    phase: 2,
+    features: {
+      meta: { ready: !config.meta.mockMode, mockMode: config.meta.mockMode },
+    },
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Phase 1+ webhooks mounted here:
+// Phase 2 · Meta Marketing API campaign endpoints
+app.use('/api/v1/campaigns', campaignsRouter);
+
+// Phase 1+ webhooks mounted here (deferred):
 // app.use('/webhooks/line', lineWebhookHandler);
 // app.use('/webhooks/meta', metaWebhookHandler);
 // app.use('/webhooks/tiktok', tiktokWebhookHandler);
 // app.use('/webhooks/pixel', pixelWebhookHandler);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`aurum-ads-engine listening on :${PORT}`);
-});
+// Start the server unless imported by tests (supertest drives `app` directly).
+if (require.main === module) {
+  app.listen(config.port, () => {
+    logger.info('server.listening', { port: config.port });
+  });
+}

@@ -1,0 +1,114 @@
+import axios from 'axios';
+
+jest.mock('axios');
+
+const mockedAxios = axios as jest.Mocked<typeof axios>;
+const instance = {
+  get: jest.fn(),
+  post: jest.fn(),
+  delete: jest.fn(),
+};
+mockedAxios.create.mockReturnValue(instance as never);
+
+// Import after axios is mocked so the singleton picks up the mock.
+import { MetaClient } from '../../src/platforms/meta/client';
+import { createMetaCampaign } from '../../src/platforms/meta/campaigns';
+import { MetaApiError } from '../../src/lib/errors';
+
+const realConfig = {
+  appId: 'app',
+  appSecret: 'secret',
+  pageId: '111',
+  adAccountId: 'act_999',
+  pageAccessToken: 'TOKEN_SECRET',
+  apiVersion: 'v23.0',
+  apiBaseUrl: 'https://graph.facebook.com',
+  mockMode: false,
+};
+
+describe('MetaClient', () => {
+  describe('mock mode', () => {
+    const client = new MetaClient({ ...realConfig, mockMode: true });
+
+    it('returns prefixed fake campaign id without hitting axios', async () => {
+      const res = await createMetaCampaign({ name: 'Test', status: 'PAUSED' }, client);
+      expect(res.id).toMatch(/^mock_camp_/);
+      expect(instance.post).not.toHaveBeenCalled();
+    });
+
+    it('returns fake image hash', async () => {
+      const res = await client.uploadImageFromUrl('https://x/y.jpg');
+      expect(res.hash).toMatch(/^mock_img_/);
+    });
+  });
+
+  describe('real mode', () => {
+    const client = new MetaClient(realConfig);
+
+    it('posts to the correct path with access_token param and returns data', async () => {
+      instance.post.mockResolvedValueOnce({ data: { id: '23999' } });
+      const res = await createMetaCampaign({ name: 'Real', status: 'PAUSED' }, client);
+
+      expect(res).toEqual({ id: '23999' });
+      expect(instance.post).toHaveBeenCalledWith(
+        '/act_999/campaigns',
+        expect.objectContaining({
+          name: 'Real',
+          objective: 'OUTCOME_LEADS',
+          special_ad_categories: ['FINANCIAL_PRODUCTS_AND_SERVICES'],
+        }),
+        { params: { access_token: 'TOKEN_SECRET' } }
+      );
+    });
+
+    it('resolves the image hash from the adimages response shape', async () => {
+      instance.post.mockResolvedValueOnce({ data: { images: { 'y.jpg': { hash: 'abc123' } } } });
+      const res = await client.uploadImageFromUrl('https://x/y.jpg');
+      expect(res.hash).toBe('abc123');
+    });
+
+    it('normalizes Meta error envelope into MetaApiError', async () => {
+      instance.post.mockRejectedValueOnce({
+        message: 'Request failed',
+        response: {
+          status: 400,
+          data: {
+            error: {
+              message: 'Invalid parameter',
+              error_user_msg: 'Something is wrong with your ad',
+              code: 100,
+              error_subcode: 1487,
+              fbtrace_id: 'AbCdEf',
+            },
+          },
+        },
+      });
+
+      await expect(createMetaCampaign({ name: 'Bad', status: 'PAUSED' }, client)).rejects.toMatchObject({
+        name: 'MetaApiError',
+        message: 'Invalid parameter',
+        userMessage: 'Something is wrong with your ad',
+        metaCode: 100,
+        fbtraceId: 'AbCdEf',
+        statusCode: 400,
+      });
+    });
+
+    it('retries on 429 then succeeds', async () => {
+      instance.post
+        .mockRejectedValueOnce({ message: 'rate limited', response: { status: 429, data: {} } })
+        .mockResolvedValueOnce({ data: { id: 'after_retry' } });
+
+      const res = await createMetaCampaign({ name: 'Retry', status: 'PAUSED' }, client);
+      expect(res.id).toBe('after_retry');
+      expect(instance.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws when access token is missing', async () => {
+      const noToken = new MetaClient({ ...realConfig, pageAccessToken: undefined });
+      await expect(createMetaCampaign({ name: 'X', status: 'PAUSED' }, noToken)).rejects.toBeInstanceOf(
+        MetaApiError
+      );
+    });
+  });
+});
