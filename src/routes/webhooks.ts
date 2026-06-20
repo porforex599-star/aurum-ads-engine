@@ -29,7 +29,11 @@ router.post('/tiktok-leads', tiktokReceive);
  * notify) for local testing without a real Meta/TikTok subscription.
  *
  * Body: { platform?: 'meta'|'tiktok', leadId?, adId?, campaignId?, formId?,
- *         email?, phone?, name? }
+ *         email?, phone?, display_name? }
+ *
+ * The human label mirrors what real callers send: display_name, falling back
+ * through full_name (Meta lead forms) and name (TikTok). The legacy `name`
+ * alias is still accepted.
  */
 async function testReceive(req: Request, res: Response): Promise<Response> {
   const cfg = getWebhookConfig();
@@ -47,6 +51,11 @@ async function testReceive(req: Request, res: Response): Promise<Response> {
   const platform: LeadPlatform = payload.platform === 'tiktok' ? 'tiktok' : 'meta';
   const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 
+  // Human label: real callers send display_name; Meta lead forms use full_name
+  // and TikTok uses name. Fall through display_name || full_name || name || null.
+  const displayName =
+    str(payload.display_name) ?? str(payload.full_name) ?? str(payload.name);
+
   const lead: NormalizedLead = {
     platform,
     platformLeadId: str(payload.leadId) ?? `test_${Date.now()}`,
@@ -55,7 +64,7 @@ async function testReceive(req: Request, res: Response): Promise<Response> {
     platformFormId: str(payload.formId) ?? '',
     email: str(payload.email),
     phone: str(payload.phone),
-    displayName: str(payload.name),
+    displayName,
     utm: {
       source: platform === 'meta' ? 'facebook' : 'tiktok',
       medium: 'paid_social',
