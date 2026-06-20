@@ -46,6 +46,13 @@ export const CampaignSpecSchema = z.object({
     ageMax: z.number().int().min(13).max(65),
     genders: z.array(z.enum(['male', 'female'])).optional(),
     interests: z.array(z.string()).default([]),
+    // ISO 3166-1 alpha-2 country codes (uppercase). Forwarded to Meta
+    // targeting.geo_locations.countries. Defaults to ['TH'] for backward
+    // compat with callers that don't send the field.
+    countries: z
+      .array(z.string().length(2).regex(/^[A-Z]{2}$/))
+      .min(1)
+      .default(['TH']),
   }),
   schedule: z.object({
     startTime: z.string().min(1), // ISO 8601

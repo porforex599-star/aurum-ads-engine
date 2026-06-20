@@ -48,7 +48,7 @@ export async function orchestrateCampaign(spec: CampaignSpec): Promise<Orchestra
       name: `${spec.name} · AdSet`,
       dailyBudget: spec.dailyBudget,
       targeting: {
-        geoLocations: { countries: ['TH'] },
+        geoLocations: { countries: spec.targeting.countries },
         ageMin: spec.targeting.ageMin,
         ageMax: spec.targeting.ageMax,
         genders: mapGenders(spec.targeting.genders),
@@ -194,7 +194,7 @@ async function persistCampaign(spec: CampaignSpec, input: PersistInput): Promise
       platforms: ['meta'],
       budget_daily: spec.dailyBudget / 100, // satang → THB
       geo_targets: {
-        countries: ['TH'],
+        countries: spec.targeting.countries,
         ageMin: spec.targeting.ageMin,
         ageMax: spec.targeting.ageMax,
         genders: spec.targeting.genders ?? [],

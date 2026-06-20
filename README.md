@@ -38,7 +38,7 @@ curl -X POST http://localhost:8080/api/v1/campaigns \
   -d '{
     "name": "AURUM_AI_LeadGen_Test_v1",
     "dailyBudget": 30000,
-    "targeting": { "ageMin": 28, "ageMax": 55, "interests": ["Forex", "Gold", "Investment"] },
+    "targeting": { "ageMin": 28, "ageMax": 55, "interests": ["Forex", "Gold", "Investment"], "countries": ["TH", "JP", "SG"] },
     "schedule": { "startTime": "2026-06-20T00:00:00+07:00" },
     "leadGenForm": {
       "headline": "ทดลอง AURUM AI ฟรี 7 วัน",
@@ -61,6 +61,11 @@ curl -X POST http://localhost:8080/api/v1/campaigns \
 `dailyBudget` is in the smallest currency unit (THB satang). Note the
 `FINANCIAL_PRODUCTS_AND_SERVICES` special ad category is locked in on the
 campaign and cannot be changed afterwards.
+
+`targeting.countries` is an array of ISO 3166-1 alpha-2 codes (uppercase, e.g.
+`["TH", "JP", "SG"]`) forwarded to Meta `targeting.geo_locations.countries`. It
+is optional and defaults to `["TH"]` when omitted, so existing callers are
+unaffected.
 
 ### Tests
 ```bash

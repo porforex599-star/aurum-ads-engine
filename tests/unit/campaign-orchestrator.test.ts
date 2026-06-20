@@ -55,12 +55,13 @@ jest.mock('../../src/db/supabase', () => ({
 
 import { orchestrateCampaign } from '../../src/services/campaign-orchestrator';
 import { createMetaCampaign } from '../../src/platforms/meta/campaigns';
+import { createMetaAdSet } from '../../src/platforms/meta/adsets';
 import { CampaignSpec } from '../../src/platforms/meta/types';
 
 const spec: CampaignSpec = {
   name: 'AURUM_AI_LeadGen_Test_v1',
   dailyBudget: 30000,
-  targeting: { ageMin: 28, ageMax: 55, interests: ['Forex', 'Gold'] },
+  targeting: { ageMin: 28, ageMax: 55, interests: ['Forex', 'Gold'], countries: ['TH', 'JP'] },
   schedule: { startTime: '2026-06-20T00:00:00+07:00' },
   leadGenForm: {
     headline: 'h',
@@ -133,6 +134,28 @@ describe('orchestrateCampaign', () => {
         image_hash: 'hash_1',
       }),
     ]);
+  });
+
+  it('forwards targeting.countries to the ad-set geo_locations', async () => {
+    await orchestrateCampaign(spec);
+
+    expect(createMetaAdSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targeting: expect.objectContaining({
+          geoLocations: { countries: ['TH', 'JP'] },
+        }),
+      })
+    );
+  });
+
+  it('persists targeting.countries to the ad_campaigns row', async () => {
+    await orchestrateCampaign(spec);
+
+    expect(campaignInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geo_targets: expect.objectContaining({ countries: ['TH', 'JP'] }),
+      })
+    );
   });
 
   it('rolls back created Meta nodes when a later step fails', async () => {
