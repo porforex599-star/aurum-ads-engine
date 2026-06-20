@@ -80,23 +80,25 @@ describe('POST /api/v1/campaigns (mock mode)', () => {
     const res = await request(app).post('/api/v1/campaigns').set('X-API-Key', API_KEY).send(validBody);
 
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({
+    expect(res.body).toMatchObject({ dbCampaignId: 'db-uuid-integration' });
+    expect(res.body.results.meta).toMatchObject({
       campaignId: expect.stringMatching(/^mock_camp_/),
       adSetId: expect.stringMatching(/^mock_adset_/),
       leadGenFormId: expect.stringMatching(/^mock_form_/),
-      dbCampaignId: 'db-uuid-integration',
     });
-    expect(res.body.ads).toHaveLength(1);
-    expect(res.body.ads[0]).toMatchObject({
+    expect(res.body.results.tiktok).toBeUndefined();
+    expect(res.body.results.meta.ads).toHaveLength(1);
+    expect(res.body.results.meta.ads[0]).toMatchObject({
       id: expect.stringMatching(/^mock_ad_/),
       name: 'Ad1_Authority_v1',
       creativeId: expect.stringMatching(/^mock_creative_/),
     });
 
-    // Supabase rows created.
+    // Supabase rows created — defaults to platform ['meta'] (Phase 2 behavior).
     expect(inserted.ad_campaigns).toHaveLength(1);
     expect(inserted.ad_campaigns[0]).toMatchObject({
       goal: 'lead_gen',
+      platforms: ['meta'],
       meta_campaign_id: expect.stringMatching(/^mock_camp_/),
     });
     expect(inserted.ad_creatives).toHaveLength(1);
@@ -108,10 +110,11 @@ describe('POST /api/v1/campaigns (mock mode)', () => {
 });
 
 describe('GET /health', () => {
-  it('returns phase 2 status', async () => {
+  it('returns phase 3 status reporting both platforms', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', phase: 2, version: '0.2.0' });
+    expect(res.body).toMatchObject({ status: 'ok', phase: 3, version: '0.3.0' });
     expect(res.body.features.meta.mockMode).toBe(true);
+    expect(res.body.features.tiktok.mockMode).toBe(true);
   });
 });
