@@ -10,16 +10,17 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'aurum-ads-engine',
-    version: '0.2.0',
-    phase: 2,
+    version: '0.3.0',
+    phase: 3,
     features: {
       meta: { ready: !config.meta.mockMode, mockMode: config.meta.mockMode },
+      tiktok: { ready: !config.tiktok.mockMode, mockMode: config.tiktok.mockMode },
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-// Phase 2 · Meta Marketing API campaign endpoints
+// Phase 2/3 · Meta + TikTok Marketing API campaign endpoints
 app.use('/api/v1/campaigns', campaignsRouter);
 
 // Phase 1+ webhooks mounted here (deferred):
