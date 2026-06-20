@@ -55,12 +55,16 @@ async function testReceive(req: Request, res: Response): Promise<Response> {
   // and TikTok uses name. Fall through display_name || full_name || name || null.
   const displayName =
     str(payload.display_name) ?? str(payload.full_name) ?? str(payload.name);
+  // Attribution id: real callers send platformCampaignId (matched against the
+  // per-platform ad_campaigns id column). `campaignId` is the legacy alias.
+  const platformCampaignId =
+    str(payload.platformCampaignId) ?? str(payload.campaignId) ?? '';
 
   const lead: NormalizedLead = {
     platform,
     platformLeadId: str(payload.leadId) ?? `test_${Date.now()}`,
     platformAdId: str(payload.adId) ?? '',
-    platformCampaignId: str(payload.campaignId) ?? '',
+    platformCampaignId,
     platformFormId: str(payload.formId) ?? '',
     email: str(payload.email),
     phone: str(payload.phone),
@@ -68,16 +72,23 @@ async function testReceive(req: Request, res: Response): Promise<Response> {
     utm: {
       source: platform === 'meta' ? 'facebook' : 'tiktok',
       medium: 'paid_social',
-      campaign: str(payload.campaignId) ?? '',
+      campaign: platformCampaignId,
     },
     rawPayload: payload,
     receivedAt: new Date(),
   };
 
   try {
-    const { leadId, isNew } = await persistLead(lead);
+    const { leadId, isNew, sourceCampaignId } = await persistLead(lead);
     void notifyNewLead(lead, leadId, isNew);
-    return res.status(200).json({ ok: true, leadId, isNew });
+    return res.status(200).json({
+      ok: true,
+      lead_id: leadId,
+      leadId,
+      isNew,
+      display_name: lead.displayName ?? null,
+      source_campaign_id: sourceCampaignId,
+    });
   } catch (err) {
     logger.error('webhook.test.error', { message: errMessage(err) });
     return res.status(200).json({ ok: false, message: errMessage(err) });

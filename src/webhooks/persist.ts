@@ -82,7 +82,7 @@ async function resolveAttribution(
 
 export async function persistLead(
   lead: NormalizedLead
-): Promise<{ leadId: string; isNew: boolean }> {
+): Promise<{ leadId: string; isNew: boolean; sourceCampaignId: string | null }> {
   const sourcePlatform = PLATFORM_DB_VALUE[lead.platform];
 
   // 1. Idempotency pre-check.
@@ -90,12 +90,17 @@ export async function persistLead(
     const existing = await findExisting(sourcePlatform, lead.platformLeadId);
     if (existing) {
       logger.info('webhook.persist.duplicate', { leadId: existing, platform: lead.platform });
-      return { leadId: existing, isNew: false };
+      return { leadId: existing, isNew: false, sourceCampaignId: null };
     }
   }
 
   // 2. Resolve campaign / creative attribution.
   const { campaignId, creativeId } = await resolveAttribution(lead);
+  // Breadcrumb: a campaign id was supplied but matched no ad_campaigns row.
+  // Keep source_campaign_id NULL (no false attribution) but record the raw id
+  // so we can backfill / debug the missing campaign later.
+  const unresolvedCampaignId =
+    !campaignId && lead.platformCampaignId ? lead.platformCampaignId : null;
 
   // 3. Insert. tags is an OBJECT (not array) so the unique index can key off
   //    tags->>'source_lead_id'. We intentionally avoid storing raw form field
@@ -114,6 +119,9 @@ export async function persistLead(
       source_platform: lead.platform,
       ad_id: lead.platformAdId || null,
       form_id: lead.platformFormId || null,
+      ...(unresolvedCampaignId
+        ? { platform_campaign_id_unresolved: unresolvedCampaignId }
+        : {}),
     },
     utm_source: lead.utm.source || null,
     utm_medium: lead.utm.medium || null,
@@ -131,7 +139,7 @@ export async function persistLead(
     // Concurrent duplicate — the unique index rejected the race loser.
     if (pgErr.code === '23505' && lead.platformLeadId) {
       const existing = await findExisting(sourcePlatform, lead.platformLeadId);
-      if (existing) return { leadId: existing, isNew: false };
+      if (existing) return { leadId: existing, isNew: false, sourceCampaignId: null };
     }
     throw new Error(`Failed to persist lead: ${error.message}`);
   }
@@ -142,5 +150,5 @@ export async function persistLead(
     sourceCampaignId: campaignId,
     sourceCreativeId: creativeId,
   });
-  return { leadId: data.id as string, isNew: true };
+  return { leadId: data.id as string, isNew: true, sourceCampaignId: campaignId };
 }
