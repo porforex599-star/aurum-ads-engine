@@ -40,6 +40,10 @@ export interface MetaCampaignStatus {
 
 export const CampaignSpecSchema = z.object({
   name: z.string().min(1),
+  // Which ad platform(s) to create the campaign on. An array so a single spec
+  // can fan out to multiple platforms (e.g. ['meta','tiktok'] = create on both).
+  // Defaults to ['meta'] so Phase 2 callers that omit the field are unchanged.
+  platform: z.array(z.enum(['meta', 'tiktok'])).min(1).default(['meta']),
   dailyBudget: z.number().int().positive(), // smallest currency unit (THB satang)
   targeting: z.object({
     ageMin: z.number().int().min(13).max(65),
@@ -90,6 +94,7 @@ export const CampaignSpecSchema = z.object({
 });
 
 export type CampaignSpec = z.infer<typeof CampaignSpecSchema>;
+export type Platform = CampaignSpec['platform'][number];
 
 export interface OrchestrationResult {
   campaignId: string;
@@ -97,4 +102,30 @@ export interface OrchestrationResult {
   leadGenFormId: string;
   ads: { id: string; name: string; creativeId: string }[];
   dbCampaignId: string;
+}
+
+/** Public per-platform result returned by each platform orchestrator. */
+export interface MetaPlatformResult {
+  campaignId: string;
+  adSetId: string;
+  leadGenFormId: string;
+  ads: { id: string; name: string; creativeId: string }[];
+}
+
+export interface TiktokPlatformResult {
+  campaignId: string;
+  adGroupId: string;
+  leadGenFormId: string;
+  ads: { id: string; name: string; creativeId: string }[];
+}
+
+export interface PlatformResults {
+  meta?: MetaPlatformResult;
+  tiktok?: TiktokPlatformResult;
+}
+
+/** Combined result of a (possibly multi-platform) orchestration. */
+export interface MultiPlatformOrchestrationResult {
+  dbCampaignId: string;
+  results: PlatformResults;
 }
