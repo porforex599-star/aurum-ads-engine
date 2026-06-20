@@ -18,3 +18,11 @@ process.env.TIKTOK_ADVERTISER_ID = '7000000000000000001';
 process.env.TIKTOK_ACCESS_TOKEN = 'test-tiktok-access-token';
 process.env.TIKTOK_PIXEL_ID = 'D8QGJRRC77U082M868CG';
 process.env.LOG_LEVEL = 'error';
+
+// Phase 1 · webhook test defaults. Mock mode bypasses signature checks; tests
+// that exercise signature failure flip WEBHOOK_MOCK_MODE to 'false' locally
+// (getWebhookConfig reads process.env at request time).
+process.env.WEBHOOK_MOCK_MODE = 'true';
+process.env.META_APP_SECRET = 'test-meta-app-secret';
+process.env.META_WEBHOOK_VERIFY_TOKEN = 'test-verify-token';
+process.env.TIKTOK_WEBHOOK_SECRET = 'test-tiktok-secret';
