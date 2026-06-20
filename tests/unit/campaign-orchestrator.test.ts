@@ -60,6 +60,7 @@ import { CampaignSpec } from '../../src/platforms/meta/types';
 
 const spec: CampaignSpec = {
   name: 'AURUM_AI_LeadGen_Test_v1',
+  platform: ['meta'],
   dailyBudget: 30000,
   targeting: { ageMin: 28, ageMax: 55, interests: ['Forex', 'Gold'], countries: ['TH', 'JP'] },
   schedule: { startTime: '2026-06-20T00:00:00+07:00' },
@@ -89,7 +90,7 @@ describe('orchestrateCampaign', () => {
     callOrder.length = 0;
   });
 
-  it('runs the chain in the correct order and returns all IDs', async () => {
+  it('runs the chain in the correct order and returns all IDs under results.meta', async () => {
     const result = await orchestrateCampaign(spec);
 
     expect(callOrder).toEqual([
@@ -102,11 +103,15 @@ describe('orchestrateCampaign', () => {
       'ad',
     ]);
     expect(result).toEqual({
-      campaignId: 'camp_1',
-      adSetId: 'adset_1',
-      leadGenFormId: 'form_1',
-      ads: [{ id: 'ad_1', name: 'Ad1', creativeId: 'creative_1' }],
       dbCampaignId: 'db_uuid_1',
+      results: {
+        meta: {
+          campaignId: 'camp_1',
+          adSetId: 'adset_1',
+          leadGenFormId: 'form_1',
+          ads: [{ id: 'ad_1', name: 'Ad1', creativeId: 'creative_1' }],
+        },
+      },
     });
   });
 

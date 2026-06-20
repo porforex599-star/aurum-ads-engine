@@ -11,26 +11,69 @@ Marketing automation backend for AURUM ecosystem.
 - Custom Audiences + retargeting from CRM
 - Creative AI (Thai copy gen) + cross-platform attribution
 
-## Status: Phase 2 · PR-1 (Meta Marketing API · Lead Gen)
+## Status: Phase 3 · PR-1 (TikTok Marketing API · platform-aware orchestrator)
 
-### Phase 2 endpoints
+Phase 3 adds TikTok Marketing API lead-gen alongside Meta. A single campaign
+spec can target Meta, TikTok, or both via the `platform` field; the orchestrator
+builds each platform independently and persists every returned ID.
+
+### Endpoints
 All `/api/v1/*` routes require an `X-API-Key` header matching `AURUM_ADS_ENGINE_API_KEY`.
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| POST | `/api/v1/campaigns` | Create the full Meta lead-gen chain (campaign → ad set → lead form → creative → ad) and persist to Supabase |
+| POST | `/api/v1/campaigns` | Create the full lead-gen chain on the requested platform(s) and persist to Supabase |
 | GET | `/api/v1/campaigns` | List recent campaigns |
 | GET | `/api/v1/campaigns/:id` | Single campaign with its creatives |
-| GET | `/api/v1/campaigns/:id/status` | Live Meta delivery status (live/paused/error) |
+| GET | `/api/v1/campaigns/:id/status` | Live delivery status across each platform used (live/paused/error) |
 
-`/health` now reports `phase: 2` and Meta mock-mode state.
+`/health` reports `phase: 3`, `version: 0.3.0`, and per-platform mock-mode state
+for both `meta` and `tiktok`.
+
+#### Platform selection
+`POST /api/v1/campaigns` accepts a `platform` array:
+
+- omitted → `["meta"]` (Phase 2 behavior, unchanged)
+- `["meta"]` · `["tiktok"]` · `["meta","tiktok"]` (both)
+
+Response shape:
+```json
+{
+  "dbCampaignId": "…",
+  "results": {
+    "meta":   { "campaignId": "…", "adSetId": "…", "leadGenFormId": "…", "ads": [ … ] },
+    "tiktok": { "campaignId": "…", "adGroupId": "…", "leadGenFormId": "…", "ads": [ … ] }
+  }
+}
+```
+Only the platforms you requested appear under `results`.
+
+#### TikTok concept mapping
+TikTok names some concepts differently from Meta (same DB column purpose):
+
+| Meta | TikTok | DB column |
+| ---- | ------ | --------- |
+| Ad Set | Ad Group | `tiktok_adgroup_id` |
+| Lead Form | Instant Form | `tiktok_leadgen_form_id` |
+
+Targeting is translated in `src/platforms/tiktok/targeting.ts`: ISO alpha-2
+countries → TikTok location ids (22 curated countries; unsupported ones error in
+real mode), age min/max → TikTok age buckets, and gender → TikTok's gender field.
+
+Docs: [TikTok Marketing API](https://business-api.tiktok.com/portal/docs)
 
 #### Mock mode
-With `META_MOCK_MODE=true` (default) no real Meta calls are made — deterministic
-`mock_*` IDs are returned and rows are still written to Supabase. Flip to `false`
-once `META_*` credentials are set.
+With `META_MOCK_MODE=true` / `TIKTOK_MOCK_MODE=true` (both default) no real
+platform calls are made — deterministic IDs are returned (`mock_*` for Meta,
+`mock_tt_*` for TikTok) and rows are still written to Supabase. Flip a platform's
+flag to `false` once its credentials are set.
 
-#### Example
+#### Partial-failure policy
+For a multi-platform spec, if any platform fails the orchestrator rolls back the
+already-completed platform(s) best-effort and re-throws — a half-built
+multi-platform campaign is never persisted (matches the Phase 2 rollback pattern).
+
+#### Example · Meta only
 ```bash
 curl -X POST http://localhost:8080/api/v1/campaigns \
   -H "X-API-Key: $AURUM_ADS_ENGINE_API_KEY" \
@@ -67,16 +110,67 @@ campaign and cannot be changed afterwards.
 is optional and defaults to `["TH"]` when omitted, so existing callers are
 unaffected.
 
+#### Example · Meta + TikTok (both)
+Add `"platform": ["meta", "tiktok"]` to fan the same spec out to both platforms:
+```bash
+curl -X POST http://localhost:8080/api/v1/campaigns \
+  -H "X-API-Key: $AURUM_ADS_ENGINE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AURUM_AI_LeadGen_Multi_v1",
+    "platform": ["meta", "tiktok"],
+    "dailyBudget": 30000,
+    "targeting": { "ageMin": 28, "ageMax": 55, "interests": ["Forex", "Gold"], "countries": ["TH", "SG"] },
+    "schedule": { "startTime": "2026-06-20T00:00:00+07:00" },
+    "leadGenForm": {
+      "headline": "ทดลอง AURUM AI ฟรี 7 วัน",
+      "description": "รับบทวิเคราะห์ราคาทอง XAUUSD จาก AI",
+      "privacyPolicyUrl": "https://aurumlive.com/privacy",
+      "thankYouTitle": "ขอบคุณ!",
+      "thankYouBody": "ทีม AURUM AI จะติดต่อกลับ",
+      "thankYouButtonText": "เข้าใช้งานทันที",
+      "thankYouButtonUrl": "https://aurumlive.com"
+    },
+    "ads": [{
+      "name": "Ad1_Authority_v1",
+      "imageUrl": "https://aurumlive.com/img/ad1.jpg",
+      "primaryText": "AURUM AI ...",
+      "headline": "AI วิเคราะห์ราคาทอง XAUUSD",
+      "callToActionType": "SIGN_UP"
+    }]
+  }'
+```
+
+### Environment variables
+Meta vars are unchanged from Phase 2. TikTok adds:
+
+```
+TIKTOK_MOCK_MODE=true                 # skip real TikTok API calls (default)
+TIKTOK_ADVERTISER_ID=…                # TikTok advertiser id
+TIKTOK_ACCESS_TOKEN=…                 # long-lived OAuth Access-Token
+TIKTOK_APP_ID=…                       # TikTok app id
+TIKTOK_APP_SECRET=…                   # TikTok app secret
+TIKTOK_PIXEL_ID=D8QGJRRC77U082M868CG  # pixel on aurumlive.com
+TIKTOK_API_VERSION=v1.3
+TIKTOK_API_BASE_URL=https://business-api.tiktok.com/open_api
+```
+See `.env.example` for the full list. Required TikTok scopes:
+`ad_management`, `leads`, `audience_management`.
+
 ### Tests
 ```bash
 npm test                 # unit + integration (mock mode)
 npm run test:integration # integration only
 ```
 
-### DB migration
-`db/migrations/0002_phase2_meta_ids.sql` adds nullable columns to persist the
-Meta chain IDs (`meta_adset_id`, `meta_leadgen_form_id` on `ad_campaigns`;
-`meta_creative_id`, `meta_ad_id`, `image_hash` on `ad_creatives`).
+### DB migrations
+- `db/migrations/0002_phase2_meta_ids.sql` adds nullable columns for the Meta
+  chain IDs (`meta_adset_id`, `meta_leadgen_form_id` on `ad_campaigns`;
+  `meta_creative_id`, `meta_ad_id`, `image_hash` on `ad_creatives`).
+- `db/migrations/0003_phase3_tiktok_ids.sql` adds the TikTok child IDs
+  (`tiktok_adgroup_id`, `tiktok_leadgen_form_id` on `ad_campaigns`;
+  `tiktok_creative_id`, `tiktok_ad_id` on `ad_creatives`) plus a GIN index on
+  `ad_campaigns.platforms`. (`tiktok_campaign_id` already existed.)
 
 ## Status history: Phase 0 (foundation skeleton)
 

@@ -3,6 +3,7 @@ import { apiKeyAuth } from '../middleware/api-key-auth';
 import { orchestrateCampaign } from '../services/campaign-orchestrator';
 import { CampaignSpecSchema } from '../platforms/meta/types';
 import { getCampaignStatus } from '../platforms/meta/insights';
+import { getTiktokCampaignStatus } from '../platforms/tiktok/status';
 import { supabase } from '../db/supabase';
 import { logger } from '../lib/logger';
 import { AppError } from '../lib/errors';
@@ -10,7 +11,15 @@ import { AppError } from '../lib/errors';
 const router = Router();
 router.use(apiKeyAuth);
 
-/** POST /api/v1/campaigns — create the full Meta lead-gen chain. */
+/**
+ * POST /api/v1/campaigns — create the full lead-gen chain on the requested
+ * platform(s). Response: { dbCampaignId, results: { meta?, tiktok? } }.
+ *
+ * Backward-compat shim: when results.meta exists we also mirror the Phase 2
+ * top-level fields (campaignId, adSetId, leadGenFormId, ads) so the current
+ * Aurum-Admin /ads frontend keeps reading `data.campaignId` until Phase 3 PR-2
+ * ships the new UI. New clients should read from `results` instead.
+ */
 router.post('/', async (req, res) => {
   const parsed = CampaignSpecSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -23,7 +32,16 @@ router.post('/', async (req, res) => {
 
   try {
     const result = await orchestrateCampaign(parsed.data);
-    return res.status(201).json(result);
+    const response = result.results.meta
+      ? {
+          campaignId: result.results.meta.campaignId,
+          adSetId: result.results.meta.adSetId,
+          leadGenFormId: result.results.meta.leadGenFormId,
+          ads: result.results.meta.ads,
+          ...result,
+        }
+      : result;
+    return res.status(201).json(response);
   } catch (err) {
     if (err instanceof AppError) {
       return res.status(err.statusCode).json(err.toJSON());
@@ -56,21 +74,38 @@ router.get('/:id', async (req, res) => {
   return res.json({ campaign: data });
 });
 
-/** GET /api/v1/campaigns/:id/status — live Meta delivery status. */
+/**
+ * GET /api/v1/campaigns/:id/status — live delivery status across whichever
+ * platforms the campaign used. Aggregates spend/impressions/clicks (currently
+ * zeroed: per-platform insights are stubs until the metrics PR).
+ */
 router.get('/:id/status', async (req, res) => {
   const { data, error } = await supabase
     .from('ad_campaigns')
-    .select('id, meta_campaign_id')
+    .select('id, platforms, meta_campaign_id, tiktok_campaign_id')
     .eq('id', req.params.id)
     .single();
   if (error || !data) return res.status(404).json({ error: 'not_found', message: 'Campaign not found' });
-  if (!data.meta_campaign_id) {
-    return res.status(409).json({ error: 'no_meta_campaign', message: 'Campaign has no Meta campaign ID' });
+
+  if (!data.meta_campaign_id && !data.tiktok_campaign_id) {
+    return res
+      .status(409)
+      .json({ error: 'no_platform_campaign', message: 'Campaign has no platform campaign ID' });
   }
 
   try {
-    const status = await getCampaignStatus(data.meta_campaign_id as string);
-    return res.json({ campaignId: req.params.id, metaCampaignId: data.meta_campaign_id, ...status });
+    const platforms: Record<string, unknown> = {};
+    if (data.meta_campaign_id) {
+      platforms.meta = await getCampaignStatus(data.meta_campaign_id as string);
+    }
+    if (data.tiktok_campaign_id) {
+      platforms.tiktok = await getTiktokCampaignStatus(data.tiktok_campaign_id as string);
+    }
+    return res.json({
+      campaignId: req.params.id,
+      platforms,
+      aggregate: { spend: 0, impressions: 0, clicks: 0 },
+    });
   } catch (err) {
     if (err instanceof AppError) {
       return res.status(err.statusCode).json(err.toJSON());
