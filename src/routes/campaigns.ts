@@ -14,6 +14,11 @@ router.use(apiKeyAuth);
 /**
  * POST /api/v1/campaigns — create the full lead-gen chain on the requested
  * platform(s). Response: { dbCampaignId, results: { meta?, tiktok? } }.
+ *
+ * Backward-compat shim: when results.meta exists we also mirror the Phase 2
+ * top-level fields (campaignId, adSetId, leadGenFormId, ads) so the current
+ * Aurum-Admin /ads frontend keeps reading `data.campaignId` until Phase 3 PR-2
+ * ships the new UI. New clients should read from `results` instead.
  */
 router.post('/', async (req, res) => {
   const parsed = CampaignSpecSchema.safeParse(req.body);
@@ -27,7 +32,16 @@ router.post('/', async (req, res) => {
 
   try {
     const result = await orchestrateCampaign(parsed.data);
-    return res.status(201).json(result);
+    const response = result.results.meta
+      ? {
+          campaignId: result.results.meta.campaignId,
+          adSetId: result.results.meta.adSetId,
+          leadGenFormId: result.results.meta.leadGenFormId,
+          ads: result.results.meta.ads,
+          ...result,
+        }
+      : result;
+    return res.status(201).json(response);
   } catch (err) {
     if (err instanceof AppError) {
       return res.status(err.statusCode).json(err.toJSON());

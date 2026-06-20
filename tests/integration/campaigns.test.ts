@@ -94,6 +94,15 @@ describe('POST /api/v1/campaigns (mock mode)', () => {
       creativeId: expect.stringMatching(/^mock_creative_/),
     });
 
+    // Backward-compat shim: Phase 2 top-level fields mirror results.meta so the
+    // current Aurum-Admin /ads frontend keeps reading data.campaignId.
+    expect(res.body).toMatchObject({
+      campaignId: res.body.results.meta.campaignId,
+      adSetId: res.body.results.meta.adSetId,
+      leadGenFormId: res.body.results.meta.leadGenFormId,
+    });
+    expect(res.body.ads).toEqual(res.body.results.meta.ads);
+
     // Supabase rows created — defaults to platform ['meta'] (Phase 2 behavior).
     expect(inserted.ad_campaigns).toHaveLength(1);
     expect(inserted.ad_campaigns[0]).toMatchObject({
@@ -106,6 +115,24 @@ describe('POST /api/v1/campaigns (mock mode)', () => {
     // Real Meta API must NOT be called in mock mode.
     expect(axiosInstance.post).not.toHaveBeenCalled();
     expect(axiosInstance.get).not.toHaveBeenCalled();
+  });
+
+  it('omits the Phase 2 top-level shim for a tiktok-only campaign', async () => {
+    const res = await request(app)
+      .post('/api/v1/campaigns')
+      .set('X-API-Key', API_KEY)
+      .send({ ...validBody, platform: ['tiktok'] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.results.tiktok).toMatchObject({
+      campaignId: expect.stringMatching(/^mock_tt_camp_/),
+      adGroupId: expect.stringMatching(/^mock_tt_adgroup_/),
+    });
+    expect(res.body.results.meta).toBeUndefined();
+    // No Meta result → no legacy top-level mirror.
+    expect(res.body.campaignId).toBeUndefined();
+    expect(res.body.adSetId).toBeUndefined();
+    expect(res.body.ads).toBeUndefined();
   });
 });
 
