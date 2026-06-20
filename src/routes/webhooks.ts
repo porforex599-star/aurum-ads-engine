@@ -1,0 +1,80 @@
+// Phase 1 · PR-1 · Webhook routes, mounted at /api/v1/webhooks/*.
+//
+// These routes are NOT behind apiKeyAuth — they authenticate via per-platform
+// HMAC signatures instead (see src/webhooks/signature.ts). The raw body parser
+// is mounted at the app level (server.ts) so signatures verify against the exact
+// bytes Meta/TikTok signed.
+
+import { Request, Response, Router } from 'express';
+import { logger } from '../lib/logger';
+import { getWebhookConfig } from '../webhooks/config';
+import { metaReceive, metaVerify } from '../webhooks/meta-leads';
+import { tiktokReceive } from '../webhooks/tiktok-leads';
+import { persistLead } from '../webhooks/persist';
+import { notifyNewLead } from '../webhooks/notify';
+import { asBuffer, errMessage } from '../webhooks/util';
+import { LeadPlatform, NormalizedLead } from '../webhooks/types';
+
+const router = Router();
+
+// Meta (Facebook Lead Ads)
+router.get('/meta-leads', metaVerify);
+router.post('/meta-leads', metaReceive);
+
+// TikTok Lead Generation
+router.post('/tiktok-leads', tiktokReceive);
+
+/**
+ * POST /test — mock-mode only. Inject a synthetic lead end-to-end (persist +
+ * notify) for local testing without a real Meta/TikTok subscription.
+ *
+ * Body: { platform?: 'meta'|'tiktok', leadId?, adId?, campaignId?, formId?,
+ *         email?, phone?, name? }
+ */
+async function testReceive(req: Request, res: Response): Promise<Response> {
+  const cfg = getWebhookConfig();
+  if (!cfg.mockMode) {
+    return res.status(403).json({ error: 'mock_mode_only' });
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(asBuffer(req.body).toString('utf8') || '{}');
+  } catch (err) {
+    return res.status(400).json({ error: 'invalid_json', message: errMessage(err) });
+  }
+
+  const platform: LeadPlatform = payload.platform === 'tiktok' ? 'tiktok' : 'meta';
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+
+  const lead: NormalizedLead = {
+    platform,
+    platformLeadId: str(payload.leadId) ?? `test_${Date.now()}`,
+    platformAdId: str(payload.adId) ?? '',
+    platformCampaignId: str(payload.campaignId) ?? '',
+    platformFormId: str(payload.formId) ?? '',
+    email: str(payload.email),
+    phone: str(payload.phone),
+    displayName: str(payload.name),
+    utm: {
+      source: platform === 'meta' ? 'facebook' : 'tiktok',
+      medium: 'paid_social',
+      campaign: str(payload.campaignId) ?? '',
+    },
+    rawPayload: payload,
+    receivedAt: new Date(),
+  };
+
+  try {
+    const { leadId, isNew } = await persistLead(lead);
+    void notifyNewLead(lead, leadId, isNew);
+    return res.status(200).json({ ok: true, leadId, isNew });
+  } catch (err) {
+    logger.error('webhook.test.error', { message: errMessage(err) });
+    return res.status(200).json({ ok: false, message: errMessage(err) });
+  }
+}
+
+router.post('/test', testReceive);
+
+export default router;
