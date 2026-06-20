@@ -35,6 +35,16 @@ const ConfigSchema = z.object({
     apiBaseUrl: z.string().default('https://graph.facebook.com'),
     mockMode: booleanFromEnv(true),
   }),
+  tiktok: z.object({
+    appId: z.string().optional(),
+    appSecret: z.string().optional(),
+    advertiserId: z.string().optional(),
+    accessToken: z.string().optional(),
+    pixelId: z.string().optional(),
+    apiVersion: z.string().default('v1.3'),
+    apiBaseUrl: z.string().default('https://business-api.tiktok.com/open_api'),
+    mockMode: booleanFromEnv(true),
+  }),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -57,6 +67,16 @@ function loadConfig(): AppConfig {
       apiVersion: process.env.META_API_VERSION,
       apiBaseUrl: process.env.META_API_BASE_URL,
       mockMode: process.env.META_MOCK_MODE,
+    },
+    tiktok: {
+      appId: process.env.TIKTOK_APP_ID,
+      appSecret: process.env.TIKTOK_APP_SECRET,
+      advertiserId: process.env.TIKTOK_ADVERTISER_ID,
+      accessToken: process.env.TIKTOK_ACCESS_TOKEN,
+      pixelId: process.env.TIKTOK_PIXEL_ID,
+      apiVersion: process.env.TIKTOK_API_VERSION,
+      apiBaseUrl: process.env.TIKTOK_API_BASE_URL,
+      mockMode: process.env.TIKTOK_MOCK_MODE,
     },
   });
 

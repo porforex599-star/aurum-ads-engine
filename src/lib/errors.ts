@@ -60,6 +60,40 @@ export class MetaApiError extends AppError {
   }
 }
 
+/**
+ * Raised when the TikTok Marketing API returns an error response.
+ *
+ * TikTok signals failure with a non-zero `code` in an HTTP-200 body
+ * (`{ code, message, request_id, data }`), so the client maps that envelope
+ * into this error rather than relying on the HTTP status alone.
+ */
+export class TiktokApiError extends AppError {
+  public readonly tiktokCode?: number;
+  public readonly requestId?: string;
+
+  constructor(
+    message: string,
+    opts: {
+      statusCode?: number;
+      tiktokCode?: number;
+      requestId?: string;
+      details?: unknown;
+    } = {}
+  ) {
+    super(message, { statusCode: opts.statusCode ?? 502, code: 'tiktok_api_error', details: opts.details });
+    this.tiktokCode = opts.tiktokCode;
+    this.requestId = opts.requestId;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      ...(this.tiktokCode !== undefined ? { tiktokCode: this.tiktokCode } : {}),
+      ...(this.requestId ? { requestId: this.requestId } : {}),
+    };
+  }
+}
+
 /** Raised when orchestration fails (after best-effort rollback). */
 export class OrchestrationError extends AppError {
   constructor(message: string, details?: unknown) {
