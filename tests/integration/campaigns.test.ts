@@ -137,11 +137,17 @@ describe('POST /api/v1/campaigns (mock mode)', () => {
 });
 
 describe('GET /health', () => {
-  it('returns phase 3 status reporting both platforms', async () => {
+  it('returns phase 4 status reporting platforms + webhook readiness', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', phase: 3, version: '0.3.0' });
+    expect(res.body).toMatchObject({ status: 'ok', phase: 4, version: '0.4.0' });
     expect(res.body.features.meta.mockMode).toBe(true);
     expect(res.body.features.tiktok.mockMode).toBe(true);
+    expect(res.body.features.webhooks).toMatchObject({
+      mockMode: true,
+      metaVerifyToken: true,
+      tiktokSecret: true,
+      notifications: { telegram: false, email: false, lineOA: false },
+    });
   });
 });
