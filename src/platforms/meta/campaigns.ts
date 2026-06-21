@@ -15,6 +15,7 @@ export interface MetaCampaignCreateBody {
   status: MetaStatus;
   special_ad_categories: string[];
   is_adset_budget_sharing_enabled: boolean;
+  bid_strategy: string;
   // Index signature so the body is assignable to the client's
   // Record<string, unknown> payload parameter.
   [key: string]: unknown;
@@ -73,6 +74,21 @@ export function getBudgetSharingEnabled(): boolean {
 }
 
 /**
+ * Resolve the bid_strategy for a campaign-create payload.
+ *
+ * Meta requires an explicit campaign-level bid_strategy; when omitted it
+ * defaults to a ROAS-aware strategy derived from Ad Account settings, which then
+ * demands a bid_amount or optimization_goal: VALUE and fails lead-gen creates.
+ * For OUTCOME_LEADS the correct default is LOWEST_COST_WITHOUT_CAP (auto-bid, no
+ * cap, no bid_amount). Override via META_BID_STRATEGY only for cap/ROAS
+ * strategies — those additionally require a bid_amount / bid_constraints that
+ * this engine does not currently send.
+ */
+export function getBidStrategy(): string {
+  return process.env.META_BID_STRATEGY ?? 'LOWEST_COST_WITHOUT_CAP';
+}
+
+/**
  * Create a Lead Generation campaign.
  * POST /{ad_account_id}/campaigns
  *
@@ -92,6 +108,9 @@ export async function createMetaCampaign(
     // Meta requires this boolean for non-CBO lead-gen campaigns. Defaults to
     // false (adset-level budgets, no sharing); see getBudgetSharingEnabled().
     is_adset_budget_sharing_enabled: getBudgetSharingEnabled(),
+    // Explicit auto-bid strategy. Without it Meta defaults to a ROAS-aware
+    // strategy that requires bid_amount / VALUE optimization; see getBidStrategy().
+    bid_strategy: getBidStrategy(),
   };
   return client.post<MetaIdResponse>(`/${client.adAccountPath}/campaigns`, body, () => ({
     id: `mock_camp_${randomId()}`,

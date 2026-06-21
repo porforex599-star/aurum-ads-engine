@@ -5,6 +5,18 @@ All notable changes to `aurum-ads-engine` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-06-21
+### Fixed
+- `POST /act_{ad_account_id}/campaigns` now sends an explicit
+  `bid_strategy: LOWEST_COST_WITHOUT_CAP`. Omitting it made Meta default
+  to a ROAS-aware strategy derived from Ad Account settings, which then
+  required a `bid_amount` or `optimization_goal: VALUE` and failed all
+  lead-gen campaign creates with the Thai-localized "bid/ROAS" error.
+### Added
+- `META_BID_STRATEGY` env var (default `LOWEST_COST_WITHOUT_CAP`).
+  Override only for cap/ROAS strategies, which additionally require a
+  `bid_amount` / `bid_constraints` this engine does not currently send.
+
 ## [0.5.1] - 2026-06-21
 ### Fixed
 - `POST /act_{ad_account_id}/campaigns` now sends

@@ -123,6 +123,12 @@ requires this boolean for non-CBO lead-gen campaigns; AURUM uses adset-level
 daily budgets). Set `META_CAMPAIGN_BUDGET_SHARING_ENABLED=true` to enable
 Campaign Budget Optimization with 20% adset budget sharing.
 
+Campaigns are created with an explicit `bid_strategy` of
+`LOWEST_COST_WITHOUT_CAP` (Meta auto-bids to spend the budget — the correct
+default for `OUTCOME_LEADS`). Override via `META_BID_STRATEGY` only for
+cap/ROAS strategies, which additionally require a `bid_amount` /
+`bid_constraints` that the engine does not currently send.
+
 `targeting.countries` is an array of ISO 3166-1 alpha-2 codes (uppercase, e.g.
 `["TH", "JP", "SG"]`) forwarded to Meta `targeting.geo_locations.countries`. It
 is optional and defaults to `["TH"]` when omitted, so existing callers are
