@@ -23,7 +23,7 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'aurum-ads-engine',
-    version: '0.5.1',
+    version: '0.5.2',
     phase: 4,
     features: {
       meta: { ready: !config.meta.mockMode, mockMode: config.meta.mockMode },

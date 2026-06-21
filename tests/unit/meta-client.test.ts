@@ -13,6 +13,7 @@ mockedAxios.create.mockReturnValue(instance as never);
 // Import after axios is mocked so the singleton picks up the mock.
 import { MetaClient } from '../../src/platforms/meta/client';
 import { createMetaCampaign, getSpecialAdCategories } from '../../src/platforms/meta/campaigns';
+import { createMetaAdSet } from '../../src/platforms/meta/adsets';
 import { MetaApiError } from '../../src/lib/errors';
 
 const realConfig = {
@@ -142,6 +143,50 @@ describe('MetaClient', () => {
       expect(body.is_adset_budget_sharing_enabled).toBe(true);
 
       delete process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED;
+    });
+
+    it('sends bid_strategy: LOWEST_COST_WITHOUT_CAP by default (no bid_amount)', async () => {
+      delete process.env.META_BID_STRATEGY;
+      instance.post.mockResolvedValueOnce({ data: { id: '24003' } });
+      await createMetaCampaign({ name: 'Bid', status: 'PAUSED' }, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.bid_strategy).toBe('LOWEST_COST_WITHOUT_CAP');
+      expect(body).not.toHaveProperty('bid_amount');
+      expect(body).not.toHaveProperty('bid_constraints');
+    });
+
+    it('flows META_BID_STRATEGY override (COST_CAP) into the payload', async () => {
+      process.env.META_BID_STRATEGY = 'COST_CAP';
+      instance.post.mockResolvedValueOnce({ data: { id: '24004' } });
+      await createMetaCampaign({ name: 'CostCap', status: 'PAUSED' }, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.bid_strategy).toBe('COST_CAP');
+
+      delete process.env.META_BID_STRATEGY;
+    });
+
+    it('adset payload omits bid_amount / bid_constraints / VALUE optimization', async () => {
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_1' } });
+      await createMetaAdSet(
+        {
+          campaignId: '123',
+          name: 'AdSet',
+          dailyBudget: 30000,
+          targeting: { geoLocations: { countries: ['TH'] }, ageMin: 25, ageMax: 55 },
+          status: 'PAUSED',
+          promotedObject: { pageId: '111' },
+          startTime: '2026-06-22T00:00:00+0700',
+        },
+        client
+      );
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body).not.toHaveProperty('bid_amount');
+      expect(body).not.toHaveProperty('bid_constraints');
+      expect(body.optimization_goal).toBe('LEAD_GENERATION');
+      expect(body.optimization_goal).not.toBe('VALUE');
     });
   });
 });
