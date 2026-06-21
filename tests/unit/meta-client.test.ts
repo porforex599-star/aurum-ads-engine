@@ -199,6 +199,37 @@ describe('MetaClient', () => {
       expect(body.optimization_goal).toBe('LEAD_GENERATION');
       expect(body.optimization_goal).not.toBe('VALUE');
     });
+
+    it('sets targeting_automation.advantage_audience to 0 by default', async () => {
+      delete process.env.META_ADVANTAGE_AUDIENCE;
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_4' } });
+      await createMetaAdSet(baseAdSet, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.targeting.targeting_automation.advantage_audience).toBe(0);
+    });
+
+    it('flows META_ADVANTAGE_AUDIENCE=1 → advantage_audience: 1', async () => {
+      process.env.META_ADVANTAGE_AUDIENCE = '1';
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_5' } });
+      await createMetaAdSet(baseAdSet, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.targeting.targeting_automation.advantage_audience).toBe(1);
+
+      delete process.env.META_ADVANTAGE_AUDIENCE;
+    });
+
+    it('treats META_ADVANTAGE_AUDIENCE=true as the truthy alias for 1', async () => {
+      process.env.META_ADVANTAGE_AUDIENCE = 'true';
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_6' } });
+      await createMetaAdSet(baseAdSet, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.targeting.targeting_automation.advantage_audience).toBe(1);
+
+      delete process.env.META_ADVANTAGE_AUDIENCE;
+    });
   });
 });
 

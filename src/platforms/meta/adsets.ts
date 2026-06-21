@@ -1,5 +1,6 @@
 import { metaClient, MetaClient, randomId } from './client';
 import { getBidStrategy } from './bid-strategy';
+import { getAdvantageAudience } from './advantage-audience';
 import { MetaIdResponse, MetaStatus, MetaTargeting } from './types';
 
 export interface CreateAdSetInput {
@@ -29,6 +30,9 @@ export async function createMetaAdSet(
     geo_locations: { countries: t.geoLocations.countries },
     age_min: t.ageMin,
     age_max: t.ageMax,
+    // Meta requires an explicit Advantage Audience flag (0 = strict targeting,
+    // 1 = AI audience expansion); it no longer defaults. See getAdvantageAudience().
+    targeting_automation: { advantage_audience: getAdvantageAudience() },
   };
   if (t.genders?.length) targeting.genders = t.genders;
   if (t.interests?.length) targeting.interests = t.interests.map((i) => ({ id: i.id, name: i.name }));
