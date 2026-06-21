@@ -80,7 +80,7 @@ describe('runMetaDiagnostics', () => {
     const report = await runMetaDiagnostics(makeGet(happyResponses()));
 
     expect(report.ok).toBe(true);
-    expect(report.engineVersion).toBe('0.5.3');
+    expect(report.engineVersion).toBe('0.5.4');
     expect(typeof report.generatedAt).toBe('string');
     expect(Object.keys(report.checks)).toEqual([
       'envVars',

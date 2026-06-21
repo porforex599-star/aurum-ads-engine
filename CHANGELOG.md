@@ -5,6 +5,17 @@ All notable changes to `aurum-ads-engine` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-06-21
+### Fixed
+- Adset create now sends explicit `targeting.targeting_automation
+  .advantage_audience` (default `0` = strict targeting). Meta API
+  recently began rejecting adset creates that omit this flag.
+
+### Added
+- `META_ADVANTAGE_AUDIENCE` env var (default `0`). Set to `1` (or
+  `true`) to let Meta's AI expand the audience beyond the specified
+  targeting parameters.
+
 ## [0.5.3] - 2026-06-21
 ### Fixed
 - Moved `bid_strategy` from campaign-create payload to adset-create

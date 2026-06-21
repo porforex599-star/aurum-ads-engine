@@ -130,6 +130,12 @@ ad-set level, alongside the budget — not on the campaign. Override via
 `META_BID_STRATEGY` only for cap/ROAS strategies, which additionally require a
 `bid_amount` / `bid_constraints` that the engine does not currently send.
 
+Each ad set also sends an explicit `targeting.targeting_automation
+.advantage_audience` flag, which Meta now requires. It defaults to `0` (strict
+targeting — Meta targets exactly the specified audience). Set
+`META_ADVANTAGE_AUDIENCE=1` (or `true`) to let Meta's AI expand the audience
+beyond the spec to find similar users, once baseline data exists.
+
 `targeting.countries` is an array of ISO 3166-1 alpha-2 codes (uppercase, e.g.
 `["TH", "JP", "SG"]`) forwarded to Meta `targeting.geo_locations.countries`. It
 is optional and defaults to `["TH"]` when omitted, so existing callers are
