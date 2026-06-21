@@ -145,21 +145,43 @@ describe('MetaClient', () => {
       delete process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED;
     });
 
-    it('sends bid_strategy: LOWEST_COST_WITHOUT_CAP by default (no bid_amount)', async () => {
+    it('does NOT put bid_strategy on the campaign payload (ABO → adset level)', async () => {
       delete process.env.META_BID_STRATEGY;
       instance.post.mockResolvedValueOnce({ data: { id: '24003' } });
       await createMetaCampaign({ name: 'Bid', status: 'PAUSED' }, client);
 
       const body = instance.post.mock.calls[0][1];
-      expect(body.bid_strategy).toBe('LOWEST_COST_WITHOUT_CAP');
+      expect(body).not.toHaveProperty('bid_strategy');
       expect(body).not.toHaveProperty('bid_amount');
       expect(body).not.toHaveProperty('bid_constraints');
     });
+  });
 
-    it('flows META_BID_STRATEGY override (COST_CAP) into the payload', async () => {
+  describe('adset payload (real mode)', () => {
+    const client = new MetaClient(realConfig);
+    const baseAdSet = {
+      campaignId: '123',
+      name: 'AdSet',
+      dailyBudget: 30000,
+      targeting: { geoLocations: { countries: ['TH'] }, ageMin: 25, ageMax: 55 },
+      status: 'PAUSED' as const,
+      promotedObject: { pageId: '111' },
+      startTime: '2026-06-22T00:00:00+0700',
+    };
+
+    it('includes bid_strategy: LOWEST_COST_WITHOUT_CAP by default', async () => {
+      delete process.env.META_BID_STRATEGY;
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_1' } });
+      await createMetaAdSet(baseAdSet, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.bid_strategy).toBe('LOWEST_COST_WITHOUT_CAP');
+    });
+
+    it('flows META_BID_STRATEGY override (COST_CAP) into the adset payload', async () => {
       process.env.META_BID_STRATEGY = 'COST_CAP';
-      instance.post.mockResolvedValueOnce({ data: { id: '24004' } });
-      await createMetaCampaign({ name: 'CostCap', status: 'PAUSED' }, client);
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_2' } });
+      await createMetaAdSet(baseAdSet, client);
 
       const body = instance.post.mock.calls[0][1];
       expect(body.bid_strategy).toBe('COST_CAP');
@@ -167,20 +189,9 @@ describe('MetaClient', () => {
       delete process.env.META_BID_STRATEGY;
     });
 
-    it('adset payload omits bid_amount / bid_constraints / VALUE optimization', async () => {
-      instance.post.mockResolvedValueOnce({ data: { id: 'adset_1' } });
-      await createMetaAdSet(
-        {
-          campaignId: '123',
-          name: 'AdSet',
-          dailyBudget: 30000,
-          targeting: { geoLocations: { countries: ['TH'] }, ageMin: 25, ageMax: 55 },
-          status: 'PAUSED',
-          promotedObject: { pageId: '111' },
-          startTime: '2026-06-22T00:00:00+0700',
-        },
-        client
-      );
+    it('omits bid_amount / bid_constraints / VALUE optimization', async () => {
+      instance.post.mockResolvedValueOnce({ data: { id: 'adset_3' } });
+      await createMetaAdSet(baseAdSet, client);
 
       const body = instance.post.mock.calls[0][1];
       expect(body).not.toHaveProperty('bid_amount');
