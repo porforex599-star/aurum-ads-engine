@@ -5,6 +5,18 @@ All notable changes to `aurum-ads-engine` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-21
+### Fixed
+- `POST /act_{ad_account_id}/campaigns` now sends
+  `is_adset_budget_sharing_enabled: false` by default. Meta recently
+  began requiring this field as a boolean for non-CBO lead-gen
+  campaigns; omitting it caused all live campaign creates to fail with
+  the Thai-localized "is_adset_budget_sharing_enabled" error.
+### Added
+- `META_CAMPAIGN_BUDGET_SHARING_ENABLED` env var (default `false`).
+  Set to `true` to enable Campaign Budget Optimization with 20% adset
+  budget sharing.
+
 ## [0.5.0] - 2026-06-21
 ### Added
 - `GET /api/v1/diag/meta` — health endpoint that validates env vars, token

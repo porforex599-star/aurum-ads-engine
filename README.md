@@ -118,6 +118,11 @@ be changed afterwards. Override via the `META_SPECIAL_AD_CATEGORIES` env var
 (comma-separated) only if the Ad Account has been registered under Meta's
 special-ads program for a restricted category.
 
+Campaigns are created with `is_adset_budget_sharing_enabled: false` (Meta
+requires this boolean for non-CBO lead-gen campaigns; AURUM uses adset-level
+daily budgets). Set `META_CAMPAIGN_BUDGET_SHARING_ENABLED=true` to enable
+Campaign Budget Optimization with 20% adset budget sharing.
+
 `targeting.countries` is an array of ISO 3166-1 alpha-2 codes (uppercase, e.g.
 `["TH", "JP", "SG"]`) forwarded to Meta `targeting.geo_locations.countries`. It
 is optional and defaults to `["TH"]` when omitted, so existing callers are
