@@ -12,7 +12,7 @@ mockedAxios.create.mockReturnValue(instance as never);
 
 // Import after axios is mocked so the singleton picks up the mock.
 import { MetaClient } from '../../src/platforms/meta/client';
-import { createMetaCampaign } from '../../src/platforms/meta/campaigns';
+import { createMetaCampaign, getSpecialAdCategories } from '../../src/platforms/meta/campaigns';
 import { MetaApiError } from '../../src/lib/errors';
 
 const realConfig = {
@@ -55,7 +55,7 @@ describe('MetaClient', () => {
         expect.objectContaining({
           name: 'Real',
           objective: 'OUTCOME_LEADS',
-          special_ad_categories: ['FINANCIAL_PRODUCTS_AND_SERVICES'],
+          special_ad_categories: ['NONE'],
         }),
         { params: { access_token: 'TOKEN_SECRET' } }
       );
@@ -110,5 +110,47 @@ describe('MetaClient', () => {
         MetaApiError
       );
     });
+
+    it('builds the create payload with special_ad_categories ["NONE"] by default', async () => {
+      delete process.env.META_SPECIAL_AD_CATEGORIES;
+      instance.post.mockResolvedValueOnce({ data: { id: '24000' } });
+      await createMetaCampaign({ name: 'Default', status: 'PAUSED' }, client);
+
+      expect(instance.post).toHaveBeenCalledWith(
+        '/act_999/campaigns',
+        expect.objectContaining({ special_ad_categories: ['NONE'] }),
+        { params: { access_token: 'TOKEN_SECRET' } }
+      );
+    });
+  });
+});
+
+describe('special_ad_categories', () => {
+  beforeEach(() => {
+    delete process.env.META_SPECIAL_AD_CATEGORIES;
+  });
+
+  test('defaults to ["NONE"] when env unset', () => {
+    expect(getSpecialAdCategories()).toEqual(['NONE']);
+  });
+
+  test('parses comma-separated env override', () => {
+    process.env.META_SPECIAL_AD_CATEGORIES = 'HOUSING,EMPLOYMENT';
+    expect(getSpecialAdCategories()).toEqual(['HOUSING', 'EMPLOYMENT']);
+  });
+
+  test('upper-cases + trims', () => {
+    process.env.META_SPECIAL_AD_CATEGORIES = ' credit ,housing ';
+    expect(getSpecialAdCategories()).toEqual(['CREDIT', 'HOUSING']);
+  });
+
+  test('falls back to ["NONE"] when env contains only invalid tokens', () => {
+    process.env.META_SPECIAL_AD_CATEGORIES = 'GARBAGE,FOO';
+    expect(getSpecialAdCategories()).toEqual(['NONE']);
+  });
+
+  test('drops invalid tokens but keeps valid ones', () => {
+    process.env.META_SPECIAL_AD_CATEGORIES = 'HOUSING,GARBAGE';
+    expect(getSpecialAdCategories()).toEqual(['HOUSING']);
   });
 });

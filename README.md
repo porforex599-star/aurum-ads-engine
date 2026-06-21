@@ -110,9 +110,12 @@ curl -X POST http://localhost:8080/api/v1/campaigns \
     }]
   }'
 ```
-`dailyBudget` is in the smallest currency unit (THB satang). Note the
-`FINANCIAL_PRODUCTS_AND_SERVICES` special ad category is locked in on the
-campaign and cannot be changed afterwards.
+`dailyBudget` is in the smallest currency unit (THB satang). The campaign's
+special ad category defaults to `NONE` (AURUM is positioned as educational
+analysis, not a financial product) and is locked in on the campaign — it cannot
+be changed afterwards. Override via the `META_SPECIAL_AD_CATEGORIES` env var
+(comma-separated) only if the Ad Account has been registered under Meta's
+special-ads program for a restricted category.
 
 `targeting.countries` is an array of ISO 3166-1 alpha-2 codes (uppercase, e.g.
 `["TH", "JP", "SG"]`) forwarded to Meta `targeting.geo_locations.countries`. It
