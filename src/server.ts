@@ -2,6 +2,7 @@ import express from 'express';
 import { config } from './config';
 import { logger } from './lib/logger';
 import campaignsRouter from './routes/campaigns';
+import diagRouter from './routes/diag';
 import webhooksRouter from './routes/webhooks';
 import { getWebhookConfig } from './webhooks/config';
 import { getNotificationReadiness } from './webhooks/notify';
@@ -22,7 +23,7 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'aurum-ads-engine',
-    version: '0.4.0',
+    version: '0.5.0',
     phase: 4,
     features: {
       meta: { ready: !config.meta.mockMode, mockMode: config.meta.mockMode },
@@ -40,6 +41,9 @@ app.get('/health', (_req, res) => {
 
 // Phase 2/3 · Meta + TikTok Marketing API campaign endpoints
 app.use('/api/v1/campaigns', campaignsRouter);
+
+// Diagnostics · Meta configuration health (/api/v1/diag/meta)
+app.use('/api/v1/diag', diagRouter);
 
 // Start the server unless imported by tests (supertest drives `app` directly).
 if (require.main === module) {

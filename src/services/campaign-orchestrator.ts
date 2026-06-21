@@ -1,6 +1,6 @@
 import { supabase } from '../db/supabase';
 import { logger } from '../lib/logger';
-import { OrchestrationError } from '../lib/errors';
+import { MetaApiError, OrchestrationError } from '../lib/errors';
 import { metaClient } from '../platforms/meta/client';
 import { createMetaCampaign } from '../platforms/meta/campaigns';
 import { createMetaAdSet } from '../platforms/meta/adsets';
@@ -103,10 +103,26 @@ export async function orchestrateCampaign(
     // A platform that failed mid-build already rolled back its own nodes; here
     // we roll back the OTHER platform(s) that had completed successfully.
     await rollbackCompleted(completedRollbacks);
+    const rolledBack = completedRollbacks.length;
     const message = err instanceof Error ? err.message : 'Unknown orchestration error';
-    logger.error('orchestrate.failed', { message, platforms: spec.platform });
+
+    // Meta rejected the request upstream: keep the full Graph error so the route
+    // can surface error_user_msg / fbtrace_id to the caller (the client wrapper
+    // has already logged the structured `meta.error`).
+    if (err instanceof MetaApiError) {
+      logger.error('orchestrate.failed', {
+        message,
+        platforms: spec.platform,
+        stepKey: err.stepKey,
+        fbtraceId: err.fbtraceId,
+        rolledBack,
+      });
+      throw new OrchestrationError(message, { rolledBack, metaError: err });
+    }
+
+    logger.error('orchestrate.failed', { message, platforms: spec.platform, rolledBack });
     if (err instanceof OrchestrationError) throw err;
-    throw new OrchestrationError(message, { rolledBack: completedRollbacks.length });
+    throw new OrchestrationError(message, { rolledBack });
   }
 }
 
