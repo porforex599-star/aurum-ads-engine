@@ -35,6 +35,7 @@ All `/api/v1/*` routes require an `X-API-Key` header matching `AURUM_ADS_ENGINE_
 | GET | `/api/v1/campaigns` | List recent campaigns |
 | GET | `/api/v1/campaigns/:id` | Single campaign with its creatives |
 | GET | `/api/v1/campaigns/:id/status` | Live delivery status across each platform used (live/paused/error) |
+| GET | `/api/v1/diag/meta` | Meta configuration health check (env, token scopes, page-in-scope, ad-account + pixel ownership, page tasks, lead-form read) |
 
 `/health` reports `phase: 3`, `version: 0.3.0`, and per-platform mock-mode state
 for both `meta` and `tiktok`.
@@ -168,6 +169,68 @@ TIKTOK_API_BASE_URL=https://business-api.tiktok.com/open_api
 ```
 See `.env.example` for the full list. Required TikTok scopes:
 `ad_management`, `leads`, `audience_management`.
+
+## Debugging campaign creation
+
+When `POST /api/v1/campaigns` fails, the response now carries the **real** Meta
+rejection under `details.metaError` (HTTP **502** when Meta — not our
+orchestrator — rejected the request):
+
+```json
+{
+  "error": "orchestration_failed",
+  "message": "The Page you selected is not connected to this ad account.",
+  "details": {
+    "rolledBack": 0,
+    "metaError": {
+      "stepKey": "create_campaign",
+      "httpStatus": 400,
+      "code": 100,
+      "subcode": 1487,
+      "fbtraceId": "AbCdEf123",
+      "userTitle": "Invalid Page",
+      "userMsg": "The Page you selected is not connected to this ad account.",
+      "requestPath": "/v23.0/act_…/campaigns",
+      "requestPayload": { "name": "…", "access_token": "[REDACTED]" }
+    }
+  }
+}
+```
+
+The same detail is logged on a single structured `meta.error` line (searchable
+in Railway by `fbtraceId`). Secret-shaped keys (`/token|secret|key/i`) are
+redacted to `[REDACTED]` before anything is logged or returned.
+
+### `/api/v1/diag/meta`
+
+Before (or instead of) reading logs, hit the health endpoint — it validates the
+whole Meta setup and returns a per-check verdict. The first check that returns
+`ok: false` is the root cause.
+
+```bash
+curl https://aurum-ads-engine-production.up.railway.app/api/v1/diag/meta \
+  -H "X-API-Key: $AURUM_ADS_ENGINE_API_KEY"
+```
+
+It always returns **200** with a structured body (individual check failures do
+not 500 the endpoint):
+
+| Check | Fails when |
+| ----- | ---------- |
+| `envVars` | a required `META_*` env var is missing |
+| `token` | token invalid/expired, or it's an App token |
+| `token.scopeCoverage` | a required scope is missing (`pages_manage_metadata` / `leads_retrieval` get a System-User remediation hint) |
+| `pages` | `META_PAGE_ID` is **not** in the token's `/me/accounts` (`mismatch: true`) |
+| `adAccount` | `account_status !== 1` or it's owned by a different business than `META_BUSINESS_ID` |
+| `pixel` | `META_PIXEL_ID` is owned by a different business |
+| `page` | the page is missing the `ADVERTISE` or `MANAGE` task |
+| `leadForms` | the token can't read the page's lead forms (empty list is fine) |
+
+### `META_DEBUG_PAYLOADS`
+
+Set `META_DEBUG_PAYLOADS=1` to log each outbound Meta request's redacted payload
+(at `info`, tagged with `stepKey`). Off by default — it only increases log
+volume, never changes behaviour. Leave it `0` in production.
 
 ## Webhooks
 

@@ -5,6 +5,27 @@ All notable changes to `aurum-ads-engine` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-21
+### Added
+- `GET /api/v1/diag/meta` — health endpoint that validates env vars, token
+  scopes, page-in-scope, ad-account ownership, pixel ownership, page tasks,
+  and lead-form read. Returns a structured verdict so misconfiguration can
+  be diagnosed without reading server logs.
+- `MetaApiError` — preserves Meta's `error_user_msg`, `error_subcode`,
+  `fbtrace_id`, `error_data`, the request path and the redacted request
+  payload. Token/secret-shaped keys (`/token|secret|key/i`) are redacted to
+  `[REDACTED]` before logging or response forwarding.
+- `META_DEBUG_PAYLOADS` env var — off by default; when `1`, logs each
+  outbound Meta request's redacted payload.
+
+### Changed
+- `POST /api/ads/campaigns` failure response now carries `details.metaError`
+  with the upstream Graph API error detail. Status code flips 500 → 502
+  when the failure originated from Meta (not our orchestrator).
+- `meta.error` log line is now structured with `fbtraceId`, `stepKey`,
+  `userMsg`, `userTitle`, redacted `requestPayload`, and the full raw
+  Graph error object.
+
 ## [0.4.2] - 2026-06-21
 
 ### Fixed

@@ -6,7 +6,7 @@ import { getCampaignStatus } from '../platforms/meta/insights';
 import { getTiktokCampaignStatus } from '../platforms/tiktok/status';
 import { supabase } from '../db/supabase';
 import { logger } from '../lib/logger';
-import { AppError } from '../lib/errors';
+import { AppError, OrchestrationError } from '../lib/errors';
 
 const router = Router();
 router.use(apiKeyAuth);
@@ -43,6 +43,35 @@ router.post('/', async (req, res) => {
       : result;
     return res.status(201).json(response);
   } catch (err) {
+    // Meta rejected the request upstream — surface the real Graph reason and
+    // flag it as a 502 (upstream bad gateway), not a 500 (our orchestrator).
+    if (err instanceof OrchestrationError && err.metaError) {
+      const m = err.metaError;
+      logger.error('campaigns.create.meta_error', {
+        stepKey: m.stepKey,
+        fbtraceId: m.fbtraceId,
+        code: m.metaCode,
+        subcode: m.metaSubcode,
+      });
+      return res.status(502).json({
+        error: 'orchestration_failed',
+        message: m.userMsg || m.message,
+        details: {
+          rolledBack: err.rolledBack ?? 0,
+          metaError: {
+            stepKey: m.stepKey,
+            httpStatus: m.httpStatus,
+            code: m.metaCode,
+            subcode: m.metaSubcode,
+            fbtraceId: m.fbtraceId,
+            userTitle: m.userTitle,
+            userMsg: m.userMsg,
+            requestPath: m.requestPath,
+            requestPayload: m.requestPayload, // already redacted
+          },
+        },
+      });
+    }
     if (err instanceof AppError) {
       return res.status(err.statusCode).json(err.toJSON());
     }

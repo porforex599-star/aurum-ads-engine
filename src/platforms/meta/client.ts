@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import FormData from 'form-data';
 import { config } from '../../config';
 import { logger, sanitize } from '../../lib/logger';
-import { MetaApiError } from '../../lib/errors';
+import { MetaApiError, redactSecrets } from '../../lib/errors';
 
 const MAX_RETRIES = 4;
 const RETRY_BASE_MS = 500;
@@ -21,7 +21,24 @@ interface MetaErrorBody {
     error_subcode?: number;
     type?: string;
     fbtrace_id?: string;
+    error_data?: unknown;
   };
+}
+
+/**
+ * Map a Graph request path to a coarse orchestration step key, so a surfaced
+ * MetaApiError says *which* call failed (campaign vs adset vs lead form …).
+ * More specific segments are matched before the generic `/ads`.
+ */
+export function deriveStepKey(path: string): string {
+  if (/\/adsets\b/.test(path)) return 'create_adset';
+  if (/\/adcreatives\b/.test(path)) return 'create_creative';
+  if (/\/adimages\b/.test(path)) return 'upload_image';
+  if (/\/leadgen_forms\b/.test(path)) return 'create_leadgen_form';
+  if (/\/campaigns\b/.test(path)) return 'create_campaign';
+  if (/\/search\b/.test(path)) return 'resolve_interest';
+  if (/\/ads\b/.test(path)) return 'create_ad';
+  return 'meta_request';
 }
 
 /**
@@ -148,6 +165,16 @@ export class MetaClient {
       throw new MetaApiError('META_PAGE_ACCESS_TOKEN is not configured', { statusCode: 500 });
     }
     const authParams = { access_token: this.accessToken, ...params };
+    const stepKey = deriveStepKey(path);
+    // The payload we record on failure: POST body, or GET query params (the
+    // access_token is stripped by redactSecrets before it is logged/returned).
+    const payload = method === 'post' ? body : params;
+
+    // Part C · opt-in outbound payload trace. Off by default; turning it on only
+    // increases log volume, never changes behaviour.
+    if (process.env.META_DEBUG_PAYLOADS === '1') {
+      logger.info('meta.payload', { stepKey, method, path, payload: redactSecrets(payload) });
+    }
 
     let attempt = 0;
     // eslint-disable-next-line no-constant-condition
@@ -176,32 +203,57 @@ export class MetaClient {
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
-        throw this.normalizeError(axiosErr, path);
+        throw this.normalizeError(axiosErr, path, stepKey, payload);
       }
     }
   }
 
-  private normalizeError(err: AxiosError<MetaErrorBody>, path: string): MetaApiError {
+  /**
+   * Convert an axios failure into a MetaApiError that preserves the full Graph
+   * error envelope, then log every field on a single structured entry so the
+   * failure is searchable by `fbtraceId` in Railway without reading the HTTP
+   * response. The request payload is redacted (token/secret/key → [REDACTED]).
+   */
+  private normalizeError(
+    err: AxiosError<MetaErrorBody>,
+    path: string,
+    stepKey: string,
+    payload: unknown
+  ): MetaApiError {
     const metaErr = err.response?.data?.error;
     const message = metaErr?.message || err.message || 'Meta API request failed';
-    const userMessage = metaErr?.error_user_msg;
-    logger.error('meta.error', {
-      path,
-      status: err.response?.status,
-      message,
-      userMessage,
+    const requestPath = `/${this.apiVersion}${path}`;
+    const apiError = new MetaApiError(message, {
+      stepKey,
+      httpStatus: err.response?.status ?? 502,
       code: metaErr?.code,
       subcode: metaErr?.error_subcode,
+      type: metaErr?.type,
       fbtraceId: metaErr?.fbtrace_id,
+      userTitle: metaErr?.error_user_title,
+      userMsg: metaErr?.error_user_msg,
+      errorData: metaErr?.error_data,
+      requestPath,
+      requestPayload: payload,
+      rawError: metaErr ?? err.response?.data,
     });
-    return new MetaApiError(message, {
-      statusCode: err.response?.status ?? 502,
-      metaCode: metaErr?.code,
-      metaSubcode: metaErr?.error_subcode,
-      fbtraceId: metaErr?.fbtrace_id,
-      userMessage,
-      details: err.response?.data,
+
+    logger.error('meta.error', {
+      stepKey: apiError.stepKey,
+      httpStatus: apiError.httpStatus,
+      fbtraceId: apiError.fbtraceId,
+      code: apiError.metaCode,
+      subcode: apiError.metaSubcode,
+      type: apiError.type,
+      userTitle: apiError.userTitle,
+      userMsg: apiError.userMsg,
+      message,
+      requestPath: apiError.requestPath,
+      requestPayload: apiError.requestPayload, // already redacted by the constructor
+      rawError: apiError.rawError,
     });
+
+    return apiError;
   }
 }
 
