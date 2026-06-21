@@ -8,6 +8,18 @@ export interface CreateCampaignInput {
   status: MetaStatus;
 }
 
+/** Shape of the Graph API campaign-create request body. */
+export interface MetaCampaignCreateBody {
+  name: string;
+  objective: string;
+  status: MetaStatus;
+  special_ad_categories: string[];
+  is_adset_budget_sharing_enabled: boolean;
+  // Index signature so the body is assignable to the client's
+  // Record<string, unknown> payload parameter.
+  [key: string]: unknown;
+}
+
 /**
  * Meta's allowed special-ad-category enum values. Note that enum-validity does
  * not imply operational eligibility: restricted categories (e.g.
@@ -47,6 +59,20 @@ export function getSpecialAdCategories(): string[] {
 }
 
 /**
+ * Resolve is_adset_budget_sharing_enabled for a campaign-create payload.
+ *
+ * Meta now requires this boolean on POST /act_{id}/campaigns for lead-gen
+ * objectives when the campaign is NOT using Campaign Budget Optimization (CBO).
+ * AURUM uses adset-level daily budgets (each adset has its own daily_budget),
+ * so the canonical value is `false` — adsets do NOT share budget. Set
+ * META_CAMPAIGN_BUDGET_SHARING_ENABLED=true to opt into CBO behaviour (adsets
+ * share 20% of budget for overall optimization) without a code change.
+ */
+export function getBudgetSharingEnabled(): boolean {
+  return process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED === 'true';
+}
+
+/**
  * Create a Lead Generation campaign.
  * POST /{ad_account_id}/campaigns
  *
@@ -58,11 +84,14 @@ export async function createMetaCampaign(
   input: CreateCampaignInput,
   client: MetaClient = metaClient
 ): Promise<MetaIdResponse> {
-  const body = {
+  const body: MetaCampaignCreateBody = {
     name: input.name,
     objective: input.objective ?? 'OUTCOME_LEADS',
     status: input.status,
     special_ad_categories: input.specialAdCategories ?? getSpecialAdCategories(),
+    // Meta requires this boolean for non-CBO lead-gen campaigns. Defaults to
+    // false (adset-level budgets, no sharing); see getBudgetSharingEnabled().
+    is_adset_budget_sharing_enabled: getBudgetSharingEnabled(),
   };
   return client.post<MetaIdResponse>(`/${client.adAccountPath}/campaigns`, body, () => ({
     id: `mock_camp_${randomId()}`,

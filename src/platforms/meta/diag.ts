@@ -12,7 +12,7 @@ import { config } from '../../config';
  * the whole report — the endpoint always returns a structured verdict.
  */
 
-export const ENGINE_VERSION = '0.5.0';
+export const ENGINE_VERSION = '0.5.1';
 
 /** Injectable Graph GET so the report can be unit-tested with stubbed responses. */
 export type GraphGet = (path: string, params: Record<string, unknown>) => Promise<any>;

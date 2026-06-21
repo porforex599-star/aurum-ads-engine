@@ -122,6 +122,27 @@ describe('MetaClient', () => {
         { params: { access_token: 'TOKEN_SECRET' } }
       );
     });
+
+    it('sends is_adset_budget_sharing_enabled: false (boolean) by default', async () => {
+      delete process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED;
+      instance.post.mockResolvedValueOnce({ data: { id: '24001' } });
+      await createMetaCampaign({ name: 'NonCbo', status: 'PAUSED' }, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.is_adset_budget_sharing_enabled).toBe(false);
+      expect(typeof body.is_adset_budget_sharing_enabled).toBe('boolean');
+    });
+
+    it('flips is_adset_budget_sharing_enabled to true when env enables CBO', async () => {
+      process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED = 'true';
+      instance.post.mockResolvedValueOnce({ data: { id: '24002' } });
+      await createMetaCampaign({ name: 'Cbo', status: 'PAUSED' }, client);
+
+      const body = instance.post.mock.calls[0][1];
+      expect(body.is_adset_budget_sharing_enabled).toBe(true);
+
+      delete process.env.META_CAMPAIGN_BUDGET_SHARING_ENABLED;
+    });
   });
 });
 
