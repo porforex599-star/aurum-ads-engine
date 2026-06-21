@@ -5,6 +5,14 @@ All notable changes to `aurum-ads-engine` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-21
+### Fixed
+- Moved `bid_strategy` from campaign-create payload to adset-create
+  payload. Meta requires `bid_strategy` to live at the same level as
+  the budget; AURUM uses adset-level budgets (ABO), so the strategy
+  must be set per-adset. PR #10 placed it on the campaign, which
+  triggered "no campaign budget" rejections from Meta.
+
 ## [0.5.2] - 2026-06-21
 ### Fixed
 - `POST /act_{ad_account_id}/campaigns` now sends an explicit

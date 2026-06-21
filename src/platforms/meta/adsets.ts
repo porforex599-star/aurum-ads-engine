@@ -1,4 +1,5 @@
 import { metaClient, MetaClient, randomId } from './client';
+import { getBidStrategy } from './bid-strategy';
 import { MetaIdResponse, MetaStatus, MetaTargeting } from './types';
 
 export interface CreateAdSetInput {
@@ -8,6 +9,7 @@ export interface CreateAdSetInput {
   targeting: MetaTargeting;
   optimizationGoal?: 'LEAD_GENERATION';
   billingEvent?: 'IMPRESSIONS';
+  bidStrategy?: string;
   status: MetaStatus;
   promotedObject: { pageId: string };
   startTime: string; // ISO 8601
@@ -39,6 +41,10 @@ export async function createMetaAdSet(
     daily_budget: input.dailyBudget,
     optimization_goal: input.optimizationGoal ?? 'LEAD_GENERATION',
     billing_event: input.billingEvent ?? 'IMPRESSIONS',
+    // bid_strategy lives here (ad-set level) because AURUM uses ABO: each ad set
+    // carries its own daily_budget, and Meta requires bid_strategy at the budget
+    // level. Default LOWEST_COST_WITHOUT_CAP — no bid_amount / bid_constraints.
+    bid_strategy: input.bidStrategy ?? getBidStrategy(),
     status: input.status,
     targeting,
     promoted_object: { page_id: input.promotedObject.pageId },

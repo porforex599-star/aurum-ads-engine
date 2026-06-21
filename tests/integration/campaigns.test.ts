@@ -140,7 +140,7 @@ describe('GET /health', () => {
   it('returns phase 4 status reporting platforms + webhook readiness', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', phase: 4, version: '0.5.2' });
+    expect(res.body).toMatchObject({ status: 'ok', phase: 4, version: '0.5.3' });
     expect(res.body.features.meta.mockMode).toBe(true);
     expect(res.body.features.tiktok.mockMode).toBe(true);
     expect(res.body.features.webhooks).toMatchObject({
